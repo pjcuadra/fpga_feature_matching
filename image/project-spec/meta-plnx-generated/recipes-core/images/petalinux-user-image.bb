@@ -23,16 +23,5 @@ IMAGE_INSTALL = "\
 		packagegroup-core-ssh-dropbear \
 		tcf-agent \
 		bridge-utils \
-		git \
-		vim \
-		cmake \
-		packagegroup-core-x11 \
-		packagegroup-xfce-base \
-		kernel-modules \
-		opencv \
-		lxdm \
-		unzip \
-		tar \
-		gst-player \
 		"
 EXTRA_USERS_PARAMS = "usermod -P root root;"
