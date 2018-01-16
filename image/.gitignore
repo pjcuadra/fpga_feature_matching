@@ -1,0 +1,10 @@
+# Binaries from components
+*.a
+*.d
+*.elf
+*.bit
+*.o
+*.ko
+*.dtb
+*.snap
+.metadata

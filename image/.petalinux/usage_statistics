@@ -1,0 +1,7 @@
+2592628925
+
+command_total_run_petalinux-yocto=1
+command_failures_petalinux-yocto=0
+command_total_run_petalinux-config=1
+command_failures_petalinux-config=0
+command_option_petalinux-config=--oldconfig
