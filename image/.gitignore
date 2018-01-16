@@ -8,3 +8,10 @@
 *.dtb
 *.snap
 .metadata
+
+# Other
+*.old
+.petalinux/usage_statistics_token
+
+# Build Directory
+build/
