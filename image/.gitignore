@@ -11,7 +11,7 @@
 
 # Other
 *.old
-.petalinux/usage_statistics_token
+.petalinux/usage_statistics*
 
 # Build Directory
 build/
