@@ -1,13 +1,13 @@
 # Binaries from components
 *.a
 *.d
-*.elf
 *.bit
 *.o
 *.ko
 *.dtb
 *.snap
 .metadata
+components/plnx_workspace/fsbl/Release/src/
 
 # Other
 *.old
@@ -15,4 +15,4 @@
 
 # Build Directory
 build/
-images/
+./images/
