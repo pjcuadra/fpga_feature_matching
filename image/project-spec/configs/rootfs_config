@@ -1753,9 +1753,9 @@ CONFIG_run-postinsts=y
 #
 # libx11 
 #
-# CONFIG_libx11 is not set
+CONFIG_libx11=y
 # CONFIG_libx11-dbg is not set
-# CONFIG_libx11-xcb is not set
+CONFIG_libx11-xcb=y
 # CONFIG_libx11-dev is not set
 
 #
@@ -2708,24 +2708,24 @@ CONFIG_packagegroup-core-ssh-dropbear=y
 #
 # packagegroup-core-x11 
 #
-# CONFIG_packagegroup-core-x11 is not set
+CONFIG_packagegroup-core-x11=y
 # CONFIG_packagegroup-core-x11-dbg is not set
 # CONFIG_packagegroup-core-x11-utils-dbg is not set
 # CONFIG_packagegroup-core-x11-dev is not set
-# CONFIG_packagegroup-core-x11-utils is not set
+CONFIG_packagegroup-core-x11-utils=y
 # CONFIG_packagegroup-core-x11-utils-dev is not set
 
 #
 # packagegroup-core-x11-base 
 #
-# CONFIG_packagegroup-core-x11-base is not set
+CONFIG_packagegroup-core-x11-base=y
 # CONFIG_packagegroup-core-x11-base-dev is not set
 # CONFIG_packagegroup-core-x11-base-dbg is not set
 
 #
 # packagegroup-core-x11-xserver 
 #
-# CONFIG_packagegroup-core-x11-xserver is not set
+CONFIG_packagegroup-core-x11-xserver=y
 # CONFIG_packagegroup-core-x11-xserver-dev is not set
 # CONFIG_packagegroup-core-x11-xserver-dbg is not set
 
@@ -4197,7 +4197,7 @@ CONFIG_bridge-utils=y
 #
 # x11-common 
 #
-# CONFIG_x11-common is not set
+CONFIG_x11-common=y
 # CONFIG_x11-common-dbg is not set
 # CONFIG_x11-common-dev is not set
 
