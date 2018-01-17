@@ -4197,7 +4197,7 @@ CONFIG_bridge-utils=y
 #
 # x11-common 
 #
-CONFIG_x11-common=y
+# CONFIG_x11-common is not set
 # CONFIG_x11-common-dbg is not set
 # CONFIG_x11-common-dev is not set
 
