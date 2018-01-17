@@ -47,6 +47,7 @@ static const float	match_conf = 0.66f;
 // Global variables
 static Ptr<CommandLineParser> parser;
 static Ptr<FeaturesFinder> finder;
+static double lastTime = 0;
 
 
 // SW Matcher
@@ -55,6 +56,16 @@ static vector<MatchesInfo> pairwiseMatchesSw;
 // HW Matcher
 static FpgaMatcher	matcherHw(false,	match_conf);
 static vector<MatchesInfo> pairwiseMatchesHw;
+
+static inline void updateTime() {
+  lastTime = (double)getTickCount();
+}
+
+static inline void getDeltaTime() {
+  double currTime = (double)getTickCount();
+  cout << " -> Delta Time: " << (currTime - lastTime) / getTickFrequency() << "s" << endl;
+  lastTime = currTime;
+}
 
 void readImage(Mat &image, string path) {
   image = imread(path, IMREAD_COLOR);
@@ -67,7 +78,6 @@ int main(int argc, char **argv) {
   Mat matchesImagesSw, matchesImagesHw;
   Mat bwImage;
   vector<ImageFeatures> features(IMG_MAX);
-  double t = (double)getTickCount();
 
   parser = makePtr<CommandLineParser>(argc, argv, keys);
 
@@ -80,19 +90,27 @@ int main(int argc, char **argv) {
   // Create Feature Finder
   finder = makePtr<SurfFeaturesFinder>();
 
-  imwrite("test.jpg", images[0]);
-
+  cout << "Finding Features... " << endl;
+  updateTime();
   // Find features
   for (int i = 0; i < IMG_MAX; i++) {
     (*finder)(images[i],	features[i]);
   }
+  getDeltaTime();
+
 
   // Match using SW matcher
+  cout << "Matching With SW Matcher... " << endl;
+  updateTime();
   matcherSw(features,	pairwiseMatchesSw);
+  getDeltaTime();
   matcherSw.collectGarbage();
 
   // Match using HW matcher
+  cout << "Matching With HW Matcher... " << endl;
+  updateTime();
   matcherHw(features,	pairwiseMatchesHw);
+  getDeltaTime();
   matcherHw.collectGarbage();
 
   drawMatches(images[IMG_1],
