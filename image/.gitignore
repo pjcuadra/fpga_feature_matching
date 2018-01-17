@@ -15,4 +15,4 @@ components/plnx_workspace/fsbl/Release/src/
 
 # Build Directory
 build/
-./images/
+images/linux/
