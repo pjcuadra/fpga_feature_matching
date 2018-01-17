@@ -26,36 +26,92 @@
 
 // External
 #include <opencv2/opencv.hpp>
+#include <opencv2/stitching/detail/matchers.hpp>
+#include <opencv2/fpga_matcher/matcher.hpp>
 
 using namespace cv;
-using namespace cv::xfeatures2d;
 using namespace cv::detail;
 using namespace std;
+
+#define IMG_1 0
+#define IMG_2 1
+#define IMG_MAX 2
 
 static String keys = "{help h usage ? |      | Print this message    }"
                      "{img1           |      | Image 1               }"
                      "{img2           |      | Image 2               }";
 
 const string featuresFile("features.yml");
+static const float	match_conf = 0.66f;
 
 // Global variables
 static Ptr<CommandLineParser> parser;
+static Ptr<FeaturesFinder> finder;
 
+
+// SW Matcher
+static BestOf2NearestMatcher	matcherSw(false,	match_conf);
+static vector<MatchesInfo> pairwiseMatchesSw;
+// HW Matcher
+static FpgaMatcher	matcherHw(false,	match_conf);
+static vector<MatchesInfo> pairwiseMatchesHw;
 
 void readImage(Mat &image, string path) {
-  image = imread(path);
+  image = imread(path, IMREAD_COLOR);
+  image.convertTo(image, CV_8UC3);
   assert(!image.empty());
 }
 
 int main(int argc, char **argv) {
-  int skipped = 0;
+  Mat images[IMG_MAX];
+  Mat matchesImagesSw, matchesImagesHw;
+  Mat bwImage;
+  vector<ImageFeatures> features(IMG_MAX);
   double t = (double)getTickCount();
 
   parser = makePtr<CommandLineParser>(argc, argv, keys);
 
-  cout << "Params: " << endl;
-  cout << parser.get<string>("img1") << endl;
-  cout << parser.get<string>("img2") << endl;
+  // Read images
+  cout << "Reading Image 1: " <<parser->get<string>("img1") << endl;
+  readImage(images[IMG_1], parser->get<string>("img1"));
+  cout << "Reading Image 2: " <<parser->get<string>("img2") << endl;
+  readImage(images[IMG_2], parser->get<string>("img2"));
+
+  // Create Feature Finder
+  finder = makePtr<SurfFeaturesFinder>();
+
+  imwrite("test.jpg", images[0]);
+
+  // Find features
+  for (int i = 0; i < IMG_MAX; i++) {
+    (*finder)(images[i],	features[i]);
+  }
+
+  // Match using SW matcher
+  matcherSw(features,	pairwiseMatchesSw);
+  matcherSw.collectGarbage();
+
+  // Match using HW matcher
+  matcherHw(features,	pairwiseMatchesHw);
+  matcherHw.collectGarbage();
+
+  drawMatches(images[IMG_1],
+              features[IMG_1].keypoints,
+              images[IMG_2],
+              features[IMG_2].keypoints,
+              pairwiseMatchesSw[1].matches,
+              matchesImagesSw);
+
+  imwrite("matchesSW.jpg", matchesImagesSw);
+
+  drawMatches(images[IMG_1],
+              features[IMG_1].keypoints,
+              images[IMG_2],
+              features[IMG_2].keypoints,
+              pairwiseMatchesHw[1].matches,
+              matchesImagesHw);
+
+  imwrite("matchesHW.jpg", matchesImagesHw);
 
   return 0;
 }

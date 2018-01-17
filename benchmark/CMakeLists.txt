@@ -36,4 +36,4 @@ add_executable(benchmark
 )
 
 # Link to openCV
-target_link_libraries(tests_exec ${OpenCV_LIBS})
+target_link_libraries(benchmark ${OpenCV_LIBS})
