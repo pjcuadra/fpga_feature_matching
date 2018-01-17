@@ -48,6 +48,7 @@ using namespace cv::cuda;
 
 namespace {
 
+typedef std::set<std::pair<int,int> > MatchesSet;
 
 // This class is aimed to find features matches only, not to
 // estimate homography

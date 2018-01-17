@@ -40,65 +40,53 @@
 //
 //M*/
 
-#ifndef __OPENCV_STITCHING_PRECOMP_H__
-#define __OPENCV_STITCHING_PRECOMP_H__
+#ifndef __OPENCV_FPGA_MATCHER_HPP__
+#define __OPENCV_FPGA_MATCHER_HPP__
+
+#include "opencv2/core.hpp"
+#include "opencv2/features2d.hpp"
 
 #include "opencv2/opencv_modules.hpp"
-
-#include <vector>
-#include <algorithm>
-#include <utility>
-#include <set>
-#include <functional>
-#include <sstream>
-#include <iostream>
-#include <cmath>
-#include "opencv2/core.hpp"
-#include "opencv2/core/ocl.hpp"
-#include "opencv2/core/utility.hpp"
-#include "opencv2/fpga/matcher.hpp"
-#include "opencv2/stitching.hpp"
-#include "opencv2/stitching/detail/autocalib.hpp"
-#include "opencv2/stitching/detail/blenders.hpp"
-#include "opencv2/stitching/detail/timelapsers.hpp"
-#include "opencv2/stitching/detail/camera.hpp"
-#include "opencv2/stitching/detail/exposure_compensate.hpp"
 #include "opencv2/stitching/detail/matchers.hpp"
-#include "opencv2/stitching/detail/motion_estimators.hpp"
-#include "opencv2/stitching/detail/seam_finders.hpp"
-#include "opencv2/stitching/detail/util.hpp"
-#include "opencv2/stitching/detail/warpers.hpp"
-#include "opencv2/stitching/detail/util.hpp"
-#include "opencv2/imgproc.hpp"
-#include "opencv2/features2d.hpp"
-#include "opencv2/calib3d.hpp"
-
-#ifdef HAVE_OPENCV_CUDAARITHM
-#  include "opencv2/cudaarithm.hpp"
-#endif
-
-#ifdef HAVE_OPENCV_CUDAWARPING
-#  include "opencv2/cudawarping.hpp"
-#endif
-
-#ifdef HAVE_OPENCV_CUDAFEATURES2D
-#  include "opencv2/cudafeatures2d.hpp"
-#endif
-
-#ifdef HAVE_OPENCV_CUDALEGACY
-#  include "opencv2/cudalegacy.hpp"
-#endif
 
 #ifdef HAVE_OPENCV_XFEATURES2D
 #  include "opencv2/xfeatures2d/cuda.hpp"
 #endif
 
-#include "../../imgproc/src/gcgraph.hpp"
+namespace cv {
+namespace detail {
 
-#include "opencv2/core/private.hpp"
+/** @brief Features matcher which finds two best matches for each feature and leaves the best one only if the
+ratio between descriptor distances is greater than the threshold match_conf
 
-#ifdef HAVE_TEGRA_OPTIMIZATION
-# include "opencv2/stitching/stitching_tegra.hpp"
-#endif
+@sa detail::FeaturesMatcher
+ */
+class CV_EXPORTS FpgaMatcher : public FeaturesMatcher
+{
+public:
+    /** @brief Constructs a "best of 2 nearest" matcher.
 
-#endif
+    @param try_use_gpu Should try to use GPU or not
+    @param match_conf Match distances ration threshold
+    @param num_matches_thresh1 Minimum number of matches required for the 2D projective transform
+    estimation used in the inliers classification step
+    @param num_matches_thresh2 Minimum number of matches required for the 2D projective transform
+    re-estimation on inliers
+     */
+    FpgaMatcher(bool try_use_gpu = false, float match_conf = 0.3f, int num_matches_thresh1 = 6,
+                          int num_matches_thresh2 = 6);
+
+    void collectGarbage();
+
+protected:
+    void match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo &matches_info);
+
+    int num_matches_thresh1_;
+    int num_matches_thresh2_;
+    Ptr<FeaturesMatcher> impl_;
+};
+
+} // namespace detail
+} // namespace cv
+
+#endif // __OPENCV_FPGA_MATCHER_HPP__
