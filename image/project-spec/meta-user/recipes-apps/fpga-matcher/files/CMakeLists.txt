@@ -20,23 +20,35 @@
 # SOFTWARE.
 
 # Define project
-project(feature_matching_benchmark)
+project(myapp)
 
 # Define required cmake version
 cmake_minimum_required(VERSION 3.1)
 
-# set(CMAKE_CXX_STANDARD 11)
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -rdynamic")
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -rdynamic")
 
-find_package(OpenCV REQUIRED)
+include_directories(${CMAKE_SOURCE_DIR}/include)
+
+file(GLOB XEUCLIDIAN_SRC src/xeuclidean/*.c)
+add_library(xeuclidean STATIC ${XEUCLIDIAN_SRC})
+
+file(GLOB DMA_SRC src/dma/*.c)
+message(STATUS "${DMA_SRC}")
+add_library(dma STATIC ${DMA_SRC})
 
 # Create Testing executable
-add_executable(benchmark
+add_executable(fpga-matcher
   main.cpp
 )
-
 # Link to openCV
-target_link_libraries(benchmark ${OpenCV_LIBS})
+target_link_libraries(fpga-matcher xeuclidean)
+target_link_libraries(fpga-matcher dma)
 
-install(TARGETS benchmark
-	RUNTIME DESTINATION bin)
+install(TARGETS fpga-matcher xeuclidean dma
+	RUNTIME DESTINATION bin
+  ARCHIVE DESTINATION lib
+  PUBLIC_HEADER DESTINATION include
+  PRIVATE_HEADER DESTINATION include)
+
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include DESTINATION . FILES_MATCHING PATTERN "*.h")

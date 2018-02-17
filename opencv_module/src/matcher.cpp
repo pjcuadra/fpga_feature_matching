@@ -41,54 +41,139 @@
 //M*/
 
 #include "precomp.hpp"
+#include <xeuclidean.h>
+#include <dma.h>
 
 using namespace cv;
 using namespace cv::detail;
 using namespace cv::cuda;
 
+
 namespace {
 
 typedef std::set<std::pair<int,int> > MatchesSet;
 
+unsigned int float_to_u32(float val){
+	unsigned int result;
+	union float_bytes{
+		float v;
+		unsigned char bytes[4];
+	} data;
+	data.v = val;
+	result = ((data.bytes[3] << 24) + (data.bytes[2]<<16) + (data.bytes[1] << 8) + (data.bytes[0] << 0));
+	return result;
+
+}
+
 // This class is aimed to find features matches only, not to
 // estimate homography
 
-class CpuMatcher : public FeaturesMatcher
+class FpgaHWMatcher : public FeaturesMatcher
 {
 public:
-    CpuMatcher(float match_conf) : FeaturesMatcher(true), match_conf_(match_conf) {}
+    FpgaHWMatcher(float match_conf) : FeaturesMatcher(true), match_conf_(match_conf) {}
     void match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo& matches_info);
 
 private:
     float match_conf_;
+    void bf_fpga_match(InputArray queryDescriptors, InputArray trainDescriptors,
+                                  std::vector<std::vector<DMatch> >& matches) const;
 };
 
+void FpgaHWMatcher::bf_fpga_match(InputArray queryDescriptors, InputArray trainDescriptors,
+                                  std::vector<std::vector<DMatch> >& matches) const {
+    u32 * featureTable1Addr = (u32 *) 0xC0000000;
+    u32 * featureTable2Addr = (u32 *) 0xC2000000;
+    u32 * distancesTableAddr = (u32 *) 0xC4000000;
+    u32 * indexTableAddr = (u32 *) 0x80000000;
+    u32 * sendAddr  = (u32 *) 0xFFFF8000;
 
-void CpuMatcher::match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo& matches_info)
+    volatile uint32_t * dmaMemInt = NULL;
+    volatile float * dmaMemFloat = NULL;
+    void * dmaMem  = NULL;
+    volatile uint32_t * indexTable  = NULL;
+    int fd = 0;
+
+    XEuclidean euclidean_block;
+
+    const int maxFeatures = 120;
+    const int descSize = 64;
+
+    fd = open("/dev/mem", O_RDWR);
+    if (fd < 0) {
+      exit(-1);
+    }
+
+    // Map the DMA accesible memory
+    dmaMem = mmap(NULL, maxFeatures * descSize * sizeof(uint32_t), PROT_READ | PROT_WRITE,  MAP_SHARED, fd, (uint32_t) sendAddr);
+    if (dmaMem <= 0) {
+      exit(-1);
+    }
+
+    dmaMemInt = (uint32_t *) dmaMem;
+    dmaMemFloat = (float *) dmaMem;
+
+    // Map the index table
+    indexTable = (uint32_t *) mmap(NULL, maxFeatures*sizeof(uint32_t), PROT_READ | PROT_WRITE,  MAP_SHARED, fd, (uint32_t) indexTableAddr);
+    if (indexTable <= 0) {
+      exit(-1);
+    }
+
+    // Configure DMA
+    dmaInit();
+    XEuclidean_Initialize(&euclidean_block, "euclidean");
+
+    // DMA features table 1
+    memcpy(dmaMem, queryDescriptors.getMat().data, maxFeatures * descSize * sizeof(uint32_t));
+    dmaTransfer(sendAddr, featureTable1Addr, maxFeatures * descSize * sizeof(uint32_t));
+
+    // DMA features table 2
+    memcpy(dmaMem, trainDescriptors.getMat().data, maxFeatures * descSize * sizeof(uint32_t));
+    dmaTransfer(sendAddr, featureTable2Addr, maxFeatures * descSize * sizeof(uint32_t));
+
+    // Start Euclidean Block
+    XEuclidean_Set_con(&euclidean_block, 1);
+    XEuclidean_Set_tresh(&euclidean_block, float_to_u32(this->match_conf_));
+    XEuclidean_Start(&euclidean_block);
+
+    while(XEuclidean_IsDone(&euclidean_block) == 0){
+  		// j++;
+
+      // Do nothing just busy waiting
+  	}
+
+    // DMA back the distances
+    dmaTransfer(distancesTableAddr, sendAddr, maxFeatures * sizeof(uint32_t));
+
+    // Convert memory into matches
+    for (int i = 0; i < maxFeatures; i++) {
+      if (indexTable[i] == 255) { // if it's 0xFFFF no match found
+        continue;
+      }
+
+      DMatch m(i, indexTable[i], dmaMemFloat[i]);
+      std::vector<DMatch> temp;
+
+      temp.push_back(m);
+
+      matches.push_back(temp);
+    }
+
+}
+
+
+void FpgaHWMatcher::match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo& matches_info)
 {
     CV_Assert(features1.descriptors.type() == features2.descriptors.type());
-    CV_Assert(features2.descriptors.depth() == CV_8U || features2.descriptors.depth() == CV_32F);
+    CV_Assert(features2.descriptors.depth() == CV_32F);
 
     matches_info.matches.clear();
 
-    Ptr<cv::DescriptorMatcher> matcher;
-    {
-        Ptr<flann::IndexParams> indexParams = makePtr<flann::KDTreeIndexParams>();
-        Ptr<flann::SearchParams> searchParams = makePtr<flann::SearchParams>();
-
-        if (features2.descriptors.depth() == CV_8U)
-        {
-            indexParams->setAlgorithm(cvflann::FLANN_INDEX_LSH);
-            searchParams->setAlgorithm(cvflann::FLANN_INDEX_LSH);
-        }
-
-        matcher = makePtr<FlannBasedMatcher>(indexParams, searchParams);
-    }
     std::vector< std::vector<DMatch> > pair_matches;
     MatchesSet matches;
 
-    // Find 1->2 matches
-    matcher->knnMatch(features1.descriptors, features2.descriptors, pair_matches, 2);
+    // Find matches
+    bf_fpga_match(features1.descriptors, features2.descriptors, pair_matches);
     for (size_t i = 0; i < pair_matches.size(); ++i)
     {
         if (pair_matches[i].size() < 2)
@@ -101,22 +186,6 @@ void CpuMatcher::match(const ImageFeatures &features1, const ImageFeatures &feat
             matches.insert(std::make_pair(m0.queryIdx, m0.trainIdx));
         }
     }
-    LOG("\n1->2 matches: " << matches_info.matches.size() << endl);
-
-    // Find 2->1 matches
-    pair_matches.clear();
-    matcher->knnMatch(features2.descriptors, features1.descriptors, pair_matches, 2);
-    for (size_t i = 0; i < pair_matches.size(); ++i)
-    {
-        if (pair_matches[i].size() < 2)
-            continue;
-        const DMatch& m0 = pair_matches[i][0];
-        const DMatch& m1 = pair_matches[i][1];
-        if (m0.distance < (1.f - match_conf_) * m1.distance)
-            if (matches.find(std::make_pair(m0.trainIdx, m0.queryIdx)) == matches.end())
-                matches_info.matches.push_back(DMatch(m0.trainIdx, m0.queryIdx, m0.distance));
-    }
-    LOG("1->2 & 2->1 matches: " << matches_info.matches.size() << endl);
 }
 
 
@@ -133,7 +202,7 @@ FpgaMatcher::FpgaMatcher(bool try_use_gpu, float match_conf, int num_matches_thr
 {
     (void)try_use_gpu;
 
-    impl_ = makePtr<CpuMatcher>(match_conf);
+    impl_ = makePtr<FpgaHWMatcher>(match_conf);
 
     is_thread_safe_ = impl_->isThreadSafe();
     num_matches_thresh1_ = num_matches_thresh1;

@@ -66,6 +66,9 @@
 &axi_gpio_video {
 	compatible = "generic-uio";	
 };
+&euclidean_0 {
+	compatible = "generic-uio";	
+};
 
 &qspi {
 	u-boot,dm-pre-reloc;

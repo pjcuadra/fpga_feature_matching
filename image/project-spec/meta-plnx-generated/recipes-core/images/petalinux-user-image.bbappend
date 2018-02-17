@@ -9,4 +9,9 @@ IMAGE_INSTALL_append = "\
 		unzip \
 		tar \
 		gst-player \
+		benchmark \
+		peekpoke \
+		gpio-demo \
+		fpga-matcher \
+		fpga-matcher-dev \
 		"

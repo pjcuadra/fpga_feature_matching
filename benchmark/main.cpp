@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
   readImage(images[IMG_2], parser->get<string>("img2"));
 
   // Create Feature Finder
-  finder = makePtr<SurfFeaturesFinder>();
+  finder = makePtr<OrbFeaturesFinder>(Size(3,1), 120);
 
   cout << "Finding Features... " << endl;
   updateTime();
