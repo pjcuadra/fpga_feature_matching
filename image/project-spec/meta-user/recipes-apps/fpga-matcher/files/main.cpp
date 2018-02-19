@@ -36,13 +36,14 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string>
-// #include <xuartps.h>
+#include <math.h>
+
 #include <xeuclidean.h>
 #include <dma.h>
 #include <debug.h>
 
-#define NUM_FEATURES 120
-#define SIZE_DESC 64
+#define NUM_FEATURES 240
+#define SIZE_DESC 32
 
 float u32_to_float(u32 val);
 unsigned int float_to_u32(float val);
@@ -79,6 +80,7 @@ void start_euclidean(float th) {
 int test_ones_vector() {
   bool comp = false;
   uint32_t expectedIndex = 0;
+  float expectedDist = sqrt(32);
 
   LOG(LOG_INFO, "Running Ones Descriptors test\n");
 
@@ -102,11 +104,12 @@ int test_ones_vector() {
   start_euclidean(1000.0f);
 
   dmaTransfer(distancesTableAddr, sendAddr, NUM_FEATURES*sizeof(uint32_t));
+  dmaTransfer(indexTableAddr, (u32 *)((uint32_t)sendAddr + NUM_FEATURES*sizeof(uint32_t)), NUM_FEATURES*sizeof(uint32_t));
   for (int i = 0; i < NUM_FEATURES; i++) {
-    comp = (dmaMemFloat[i] == 8.0f);
+    comp = (dmaMemFloat[i] == expectedDist);
     LOG(LOG_DEBUG, "L(%d) - %d-th distance %f\n", __LINE__, i, (volatile float)dmaMemFloat[i]);
     if (!comp) {
-      LOG(LOG_ERROR, "Distance is differente than 8.0f\n");
+      LOG(LOG_ERROR, "Distance is differente than %f\n", expectedDist);
       return -1;
     }
 
@@ -125,7 +128,7 @@ int test_ones_vector() {
 
 int test_fs_vector() {
   bool comp = false;
-  uint32_t expectedIndex = 255;
+  uint32_t expectedIndex = 0xFFFFFFFF;
 
   LOG(LOG_INFO, "Running 0xFFFFFFFF Descriptors test\n");
 
@@ -144,6 +147,7 @@ int test_fs_vector() {
   start_euclidean(1000.0f);
 
   dmaTransfer(distancesTableAddr, sendAddr, NUM_FEATURES*sizeof(uint32_t));
+  dmaTransfer(indexTableAddr, (u32 *)((uint32_t)sendAddr + NUM_FEATURES*sizeof(uint32_t)), NUM_FEATURES*sizeof(uint32_t));
   for (int i = 0; i < NUM_FEATURES; i++) {
     comp = (dmaMemFloat[i] == 1000.0f);
     LOG(LOG_DEBUG, "L(%d) - %d-th distance %f\n", __LINE__, i, (volatile float)dmaMemFloat[i]);
@@ -191,6 +195,7 @@ int test_matched_vector() {
   start_euclidean(1000.0f);
 
   dmaTransfer(distancesTableAddr, sendAddr, NUM_FEATURES*sizeof(uint32_t));
+  dmaTransfer(indexTableAddr, (u32 *)((uint32_t)sendAddr + NUM_FEATURES*sizeof(uint32_t)), NUM_FEATURES*sizeof(uint32_t));
   for (int i = 0; i < NUM_FEATURES; i++) {
     comp = (dmaMemFloat[i] == expectedDist);
     LOG(LOG_DEBUG, "L(%d) - %d-th distance %f\n", __LINE__, i, (volatile float)dmaMemFloat[i]);
@@ -293,12 +298,7 @@ int main(int argc, char *argv[]){
   dmaMemInt = (uint32_t *) dmaMem;
   dmaMemFloat = (float *) dmaMem;
 
-  indexTable = (uint32_t *) mmap(NULL, NUM_FEATURES*sizeof(uint32_t), PROT_READ | PROT_WRITE,  MAP_SHARED, fd, (uint32_t) indexTableAddr);
-  if (indexTable <= 0) {
-    LOG(LOG_ERROR, "Error mapping index table memory\n");
-    exit(-1);
-  }
-  LOG(LOG_INFO, "Index table Memory mapped correctly\n");
+  indexTable = &dmaMemInt[NUM_FEATURES];
 
   dmaInit();
   LOG(LOG_INFO, "DMA Initialized\n");

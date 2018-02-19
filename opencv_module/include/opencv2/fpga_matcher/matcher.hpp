@@ -56,6 +56,7 @@
 namespace cv {
 namespace detail {
 
+
 /** @brief Features matcher which finds two best matches for each feature and leaves the best one only if the
 ratio between descriptor distances is greater than the threshold match_conf
 
@@ -78,12 +79,19 @@ public:
 
     void collectGarbage();
 
+    void setThreshold(int th);
+
 protected:
     void match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo &matches_info);
 
     int num_matches_thresh1_;
     int num_matches_thresh2_;
-    Ptr<FeaturesMatcher> impl_;
+
+private:
+    float match_conf_;
+    void bf_fpga_match(InputArray queryDescriptors, InputArray trainDescriptors,
+                                  std::vector<DMatch> &matches) const;
+    void _match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo& matches_info);
 };
 
 } // namespace detail

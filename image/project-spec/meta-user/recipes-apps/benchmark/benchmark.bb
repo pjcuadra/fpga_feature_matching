@@ -1,5 +1,5 @@
 #
-# This is the Feature Matching Demo apllication recipe
+# This is the Feature Matching Demo application recipe
 #
 #
 

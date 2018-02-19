@@ -39,7 +39,8 @@ using namespace std;
 
 static String keys = "{help h usage ? |      | Print this message    }"
                      "{img1           |      | Image 1               }"
-                     "{img2           |      | Image 2               }";
+                     "{img2           |      | Image 2               }"
+                     "{orb_th         | 100  | ORB Threshold         }";
 
 const string featuresFile("features.yml");
 static const float	match_conf = 0.66f;
@@ -51,10 +52,10 @@ static double lastTime = 0;
 
 
 // SW Matcher
-static BestOf2NearestMatcher	matcherSw(false,	match_conf);
+static BestOf2NearestMatcher	matcherSw(false, match_conf);
 static vector<MatchesInfo> pairwiseMatchesSw;
 // HW Matcher
-static FpgaMatcher	matcherHw(false,	match_conf);
+static FpgaMatcher	matcherHw(false, 25.0f);
 static vector<MatchesInfo> pairwiseMatchesHw;
 
 static inline void updateTime() {
@@ -69,8 +70,19 @@ static inline void getDeltaTime() {
 
 void readImage(Mat &image, string path) {
   image = imread(path, IMREAD_COLOR);
-  image.convertTo(image, CV_8UC3);
+  // image.convertTo(image, CV_8UC3);
   assert(!image.empty());
+}
+
+void printMatchesInfos(vector<MatchesInfo> info) {
+  cout << "info.size(): " << info.size() << endl;
+  for (int i = 0; i < info.size(); i++) {
+    cout << "info[" << i << "].H: " << info[i].H << endl;
+  }
+
+  for (int i = 0; i < info.size(); i++) {
+    cout << "info[" << i << "].matches.size(): " << info[i].matches.size() << endl;
+  }
 }
 
 int main(int argc, char **argv) {
@@ -81,6 +93,8 @@ int main(int argc, char **argv) {
 
   parser = makePtr<CommandLineParser>(argc, argv, keys);
 
+  matcherHw.setThreshold(parser->get<int>("orb_th"));
+
   // Read images
   cout << "Reading Image 1: " <<parser->get<string>("img1") << endl;
   readImage(images[IMG_1], parser->get<string>("img1"));
@@ -88,7 +102,7 @@ int main(int argc, char **argv) {
   readImage(images[IMG_2], parser->get<string>("img2"));
 
   // Create Feature Finder
-  finder = makePtr<OrbFeaturesFinder>(Size(3,1), 120);
+  finder = makePtr<OrbFeaturesFinder>(Size(3,1), 240);
 
   cout << "Finding Features... " << endl;
   updateTime();
@@ -98,6 +112,7 @@ int main(int argc, char **argv) {
   }
   getDeltaTime();
 
+  cout << "Features Depth ... " <<   features[0].descriptors.depth() << endl;
 
   // Match using SW matcher
   cout << "Matching With SW Matcher... " << endl;
@@ -112,6 +127,12 @@ int main(int argc, char **argv) {
   matcherHw(features,	pairwiseMatchesHw);
   getDeltaTime();
   matcherHw.collectGarbage();
+
+  cout << "HW Matches Info" << endl;
+  printMatchesInfos(pairwiseMatchesHw);
+
+  cout << "SW Matches Info" << endl;
+  printMatchesInfos(pairwiseMatchesSw);
 
   drawMatches(images[IMG_1],
               features[IMG_1].keypoints,
@@ -130,6 +151,7 @@ int main(int argc, char **argv) {
               matchesImagesHw);
 
   imwrite("matchesHW.jpg", matchesImagesHw);
+
 
   return 0;
 }

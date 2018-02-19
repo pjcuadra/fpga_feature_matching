@@ -11,6 +11,14 @@
 #define DMA_BASE_ADDR 0x8E200000
 #define DMA_SIZE 0x10000
 
+#define CDMACR  0x00
+#define CDMASR  0x04
+#define CDMASA  0x18
+#define CDMADA  0x20
+#define CDMABTT 0x28
+
+#define CDMASR_IDLE  0x00000002
+
 static void *ptr;
 
 void dmaInit() {
@@ -48,47 +56,47 @@ void dmaLogLevelSet(enum log_level level) {
 void dmaTransfer(u32 * src, u32 * dst, u32 sizeDMA){
 
 	LOG(LOG_INFO, "Waiting for DMA to be ready\n");
-	volatile int value = X_mReadReg(0x4);
-	while(!(value & 0x00000002)){
-		value = X_mReadReg(0x4);
+	volatile int value = X_mReadReg(CDMASR);
+	while(!(value & CDMASR_IDLE)){
+		value = X_mReadReg(CDMASR);
 	}
 	LOG(LOG_INFO, "DMA ready\n");
 
 	LOG(LOG_DEBUG, " ... programming\n");
 
-	X_mWriteReg(0x0, 0x00005000);	// set control reg Error Interrupt Enable
+	X_mWriteReg(CDMACR, 0x00005000);	// set control reg Error Interrupt Enable
 												//Complete Interrupt Enable
 
-	X_mWriteReg(0x18, (unsigned int)src);	// set src addr reg
-	X_mWriteReg(0x20, (unsigned int)dst);	 // set dst addr reg
+	X_mWriteReg(CDMASA, (unsigned int)src);	// set src addr reg
+	X_mWriteReg(CDMADA, (unsigned int)dst);	 // set dst addr reg
 
-  value = X_mReadReg(0x18);
+  value = X_mReadReg(CDMASA);
   LOG(LOG_DEBUG, " DMA src address 0x%08x\n", value);
-  value = X_mReadReg(0x20);
+  value = X_mReadReg(CDMADA);
   LOG(LOG_DEBUG, " DMA dst address 0x%08x\n", value);
 
 	LOG(LOG_DEBUG, " ...DMA status before sending\n");
 
-	value = X_mReadReg(0x4);
-	LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + 0x4, value);
-	X_mWriteReg(0x28, sizeDMA);//0x00000100);	// set number of Byte trans reg (64 bytes) TRIGGER DMA SEND
-  value = X_mReadReg(0x28);
-  LOG(LOG_DEBUG, "size: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + 0x28, value);
+	value = X_mReadReg(CDMASR);
+	LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + CDMASR, value);
+	X_mWriteReg(CDMABTT, sizeDMA);//0x00000100);	// set number of Byte trans reg (64 bytes) TRIGGER DMA SEND
+  value = X_mReadReg(CDMABTT);
+  LOG(LOG_DEBUG, "size: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + CDMABTT, value);
 
 	LOG(LOG_DEBUG, " ... polling DMA status\n");
-	value = X_mReadReg(0x4);
-	while(!(value & 0x00000002)){
-		value = X_mReadReg(0x4);
-    LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + 0x4, value);
+	value = X_mReadReg(CDMASR);
+	while(!(value & CDMASR_IDLE)){
+		value = X_mReadReg(CDMASR);
+    LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + CDMASR, value);
 	}
 
   LOG(LOG_INFO, "DMA transfer finished {src: 0x%08x, dst: 0x%08x, size: %d}\n", src, dst, sizeDMA);
 
-	value = X_mReadReg(0x4);	// get DMA status
-	LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + 0x4, value);
-	X_mWriteReg(0x4, 0x00001000);	//clean interrupt for next one
-	value = X_mReadReg(0x4);	// get DMA status
-	LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + 0x4, value);
-	X_mWriteReg(0x0, 0x00000004);	//RESET DMA>> maybe this isnt the best idea.
+	value = X_mReadReg(CDMASR);	// get DMA status
+	LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + CDMASR, value);
+	X_mWriteReg(CDMASR, 0x00001000);	//clean interrupt for next one
+	value = X_mReadReg(CDMASR);	// get DMA status
+	LOG(LOG_DEBUG, "status: 0x%08x = 0x%08x\n", DMA_BASE_ADDR + CDMASR, value);
+	X_mWriteReg(CDMACR, 0x00000004);	//RESET DMA>> maybe this isnt the best idea.
 	LOG(LOG_INFO, "DMA ready for next transaction\n");
 }

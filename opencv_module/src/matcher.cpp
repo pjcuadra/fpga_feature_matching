@@ -48,10 +48,7 @@ using namespace cv;
 using namespace cv::detail;
 using namespace cv::cuda;
 
-
 namespace {
-
-typedef std::set<std::pair<int,int> > MatchesSet;
 
 unsigned int float_to_u32(float val){
 	unsigned int result;
@@ -65,23 +62,16 @@ unsigned int float_to_u32(float val){
 
 }
 
-// This class is aimed to find features matches only, not to
-// estimate homography
+} // namespace
 
-class FpgaHWMatcher : public FeaturesMatcher
-{
-public:
-    FpgaHWMatcher(float match_conf) : FeaturesMatcher(true), match_conf_(match_conf) {}
-    void match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo& matches_info);
 
-private:
-    float match_conf_;
-    void bf_fpga_match(InputArray queryDescriptors, InputArray trainDescriptors,
-                                  std::vector<std::vector<DMatch> >& matches) const;
-};
+namespace cv {
+namespace detail {
 
-void FpgaHWMatcher::bf_fpga_match(InputArray queryDescriptors, InputArray trainDescriptors,
-                                  std::vector<std::vector<DMatch> >& matches) const {
+
+
+void FpgaMatcher::bf_fpga_match(InputArray queryDescriptors, InputArray trainDescriptors,
+                                  std::vector<DMatch> & matches) const {
     u32 * featureTable1Addr = (u32 *) 0xC0000000;
     u32 * featureTable2Addr = (u32 *) 0xC2000000;
     u32 * distancesTableAddr = (u32 *) 0xC4000000;
@@ -96,8 +86,8 @@ void FpgaHWMatcher::bf_fpga_match(InputArray queryDescriptors, InputArray trainD
 
     XEuclidean euclidean_block;
 
-    const int maxFeatures = 120;
-    const int descSize = 64;
+    const int maxFeatures = 240;
+    const int descSize = 32;
 
     fd = open("/dev/mem", O_RDWR);
     if (fd < 0) {
@@ -105,7 +95,12 @@ void FpgaHWMatcher::bf_fpga_match(InputArray queryDescriptors, InputArray trainD
     }
 
     // Map the DMA accesible memory
-    dmaMem = mmap(NULL, maxFeatures * descSize * sizeof(uint32_t), PROT_READ | PROT_WRITE,  MAP_SHARED, fd, (uint32_t) sendAddr);
+    dmaMem = mmap(NULL,
+			maxFeatures * descSize * sizeof(uint32_t),
+			PROT_READ | PROT_WRITE,
+			MAP_SHARED,
+			fd,
+			(uint32_t) sendAddr);
     if (dmaMem <= 0) {
       exit(-1);
     }
@@ -113,18 +108,18 @@ void FpgaHWMatcher::bf_fpga_match(InputArray queryDescriptors, InputArray trainD
     dmaMemInt = (uint32_t *) dmaMem;
     dmaMemFloat = (float *) dmaMem;
 
-    // Map the index table
-    indexTable = (uint32_t *) mmap(NULL, maxFeatures*sizeof(uint32_t), PROT_READ | PROT_WRITE,  MAP_SHARED, fd, (uint32_t) indexTableAddr);
-    if (indexTable <= 0) {
-      exit(-1);
-    }
+		indexTable = &dmaMemInt[maxFeatures];
 
     // Configure DMA
     dmaInit();
     XEuclidean_Initialize(&euclidean_block, "euclidean");
 
+		// std::cout << "First element" <<  << std::endl;
+		// std::cout << "Full Matrix: " << queryDescriptors.getMat() << std::endl;
+		// std::cout << "First element: " << (float)queryDescriptors.getMat().data[32] << std::endl;
+
     // DMA features table 1
-    memcpy(dmaMem, queryDescriptors.getMat().data, maxFeatures * descSize * sizeof(uint32_t));
+		memcpy(dmaMem, queryDescriptors.getMat().data, maxFeatures * descSize * sizeof(uint32_t));
     dmaTransfer(sendAddr, featureTable1Addr, maxFeatures * descSize * sizeof(uint32_t));
 
     // DMA features table 2
@@ -137,63 +132,50 @@ void FpgaHWMatcher::bf_fpga_match(InputArray queryDescriptors, InputArray trainD
     XEuclidean_Start(&euclidean_block);
 
     while(XEuclidean_IsDone(&euclidean_block) == 0){
-  		// j++;
-
       // Do nothing just busy waiting
   	}
 
     // DMA back the distances
     dmaTransfer(distancesTableAddr, sendAddr, maxFeatures * sizeof(uint32_t));
+		dmaTransfer(indexTableAddr, (u32 *)((uint32_t)sendAddr +  maxFeatures * sizeof(uint32_t)), maxFeatures * sizeof(uint32_t));
 
     // Convert memory into matches
     for (int i = 0; i < maxFeatures; i++) {
-      if (indexTable[i] == 255) { // if it's 0xFFFF no match found
+      if (indexTable[i] == 0xFFFFFFFF) { // if it's 0xFFFF no match found
+				// printf("OpenCV FPGA Matcher DEBUG: Wrong Index\n");
         continue;
       }
 
+			// printf("OpenCV FPGA Matcher DEBUG: Match %d -> %d %f\n", i, indexTable[i], dmaMemFloat[i]);
+
       DMatch m(i, indexTable[i], dmaMemFloat[i]);
-      std::vector<DMatch> temp;
+      matches.push_back(m);
 
-      temp.push_back(m);
-
-      matches.push_back(temp);
     }
 
+		// printf("OpenCV FPGA Matcher DEBUG: Matches %d", matches.size());
 }
 
 
-void FpgaHWMatcher::match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo& matches_info)
+void FpgaMatcher::_match(const ImageFeatures &features1, const ImageFeatures &features2, MatchesInfo& matches_info)
 {
     CV_Assert(features1.descriptors.type() == features2.descriptors.type());
-    CV_Assert(features2.descriptors.depth() == CV_32F);
+    // CV_Assert(features2.descriptors.depth() == CV_32F);
+
+		Mat f1, f2;
+
+		features1.descriptors.convertTo(f1, CV_32F);
+		features2.descriptors.convertTo(f2, CV_32F);
 
     matches_info.matches.clear();
 
-    std::vector< std::vector<DMatch> > pair_matches;
-    MatchesSet matches;
+    std::vector<DMatch> pair_matches;
 
     // Find matches
-    bf_fpga_match(features1.descriptors, features2.descriptors, pair_matches);
-    for (size_t i = 0; i < pair_matches.size(); ++i)
-    {
-        if (pair_matches[i].size() < 2)
-            continue;
-        const DMatch& m0 = pair_matches[i][0];
-        const DMatch& m1 = pair_matches[i][1];
-        if (m0.distance < (1.f - match_conf_) * m1.distance)
-        {
-            matches_info.matches.push_back(m0);
-            matches.insert(std::make_pair(m0.queryIdx, m0.trainIdx));
-        }
-    }
+    bf_fpga_match(f1, f2, pair_matches);
+
+		matches_info.matches.insert(matches_info.matches.end(), pair_matches.begin(), pair_matches.end());
 }
-
-
-} // namespace
-
-
-namespace cv {
-namespace detail {
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -202,18 +184,22 @@ FpgaMatcher::FpgaMatcher(bool try_use_gpu, float match_conf, int num_matches_thr
 {
     (void)try_use_gpu;
 
-    impl_ = makePtr<FpgaHWMatcher>(match_conf);
+    // impl_ = makePtr<FpgaHWMatcher>(match_conf);
 
-    is_thread_safe_ = impl_->isThreadSafe();
+    is_thread_safe_ = true;
     num_matches_thresh1_ = num_matches_thresh1;
     num_matches_thresh2_ = num_matches_thresh2;
+		this->match_conf_ = match_conf;
 }
 
+void FpgaMatcher::setThreshold(int th) {
+	this->match_conf_ = th;
+}
 
 void FpgaMatcher::match(const ImageFeatures &features1, const ImageFeatures &features2,
                                   MatchesInfo &matches_info)
 {
-    (*impl_)(features1, features2, matches_info);
+    _match(features1, features2, matches_info);
 
     // Check if it makes sense to find homography
     if (matches_info.matches.size() < static_cast<size_t>(num_matches_thresh1_))
@@ -290,7 +276,7 @@ void FpgaMatcher::match(const ImageFeatures &features1, const ImageFeatures &fea
 
 void FpgaMatcher::collectGarbage()
 {
-    impl_->collectGarbage();
+    // impl_->collectGarbage();
 }
 
 
